@@ -22,6 +22,7 @@ Inventory decisions often require balancing multiple competing factors:
 - Available budget
 - Supplier reliability
 - Operational continuity
+- Manage placing orders, messaging etc.
 
 AgentStock AI models these factors through a multi-stage decision pipeline.
 
