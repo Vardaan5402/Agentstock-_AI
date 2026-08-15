@@ -42,7 +42,7 @@ def analyze_single_sku(sku: str, item_name: str, stock: int, burn: float, suppli
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -72,7 +72,7 @@ def process_invoice_document(file_bytes: bytes, mime_type: str) -> str:
     quantities, and supplier pricing directly from unstructured invoices or PDFs.
     """
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-3.6-flash',
         contents=[
             types.Part.from_bytes(
                 data=file_bytes,

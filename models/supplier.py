@@ -9,6 +9,7 @@ class Supplier(BaseModel):
     id: str = Field(min_length=1)
     business_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
+    phone: str | None = None
     email: str | None = None
     lead_time_days: float = Field(ge=0)
     reliability_score: float = Field(default=0.5, ge=0, le=1)

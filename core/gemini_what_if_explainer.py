@@ -11,7 +11,7 @@ class WhatIfExplainer(Protocol):
 
 
 class GeminiWhatIfExplainer:
-    def __init__(self, api_key: str | None = None, model: str = "gemini-2.5-flash") -> None:
+    def __init__(self, api_key: str | None = None, model: str = "gemini-3.6-flash") -> None:
         key = api_key or os.environ.get("GEMINI_API_KEY")
         if not key:
             raise ValueError("GEMINI_API_KEY is required to create GeminiWhatIfExplainer")
