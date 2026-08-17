@@ -161,20 +161,18 @@ def render_recommendation_hero(
 
 def render_supplier_communication_suite(
     supplier_name: str,
-    phone: str = "+91 9569679741",
-    email: str = "dispatch@supplierlogistics.com",
-    sku: str = "MILK-10L",
-    product_name: str = "Organic whole milk (10L crate)",
-    quantity: str | int = 100,
-    unit_price: str | float = 120.0,
-    total_cost: str = "₹12,000.00",
+    phone: str | None,
+    email: str | None,
+    sku: str,
+    product_name: str,
+    quantity: str | int,
+    unit_price: str | float,
+    total_cost: str,
 ):
     """Render interactive Calling, WhatsApp, SMS/Email PO dispatch suite for chosen supplier."""
     import urllib.parse
 
-    clean_phone = "".join(c for c in str(phone) if c.isdigit() or c == "+")
-    if not clean_phone.startswith("+"):
-        clean_phone = "+91" + clean_phone.lstrip("0")
+    clean_phone = "".join(c for c in str(phone or "") if c.isdigit() or c == "+")
 
     wa_msg = (
         f"Hello {supplier_name} Sales Desk,\n\n"
@@ -186,12 +184,12 @@ def render_supplier_communication_suite(
         f"Please confirm PO receipt and estimated delivery date."
     )
     encoded_wa = urllib.parse.quote(wa_msg)
-    wa_url = f"https://wa.me/{clean_phone.replace('+', '')}?text={encoded_wa}"
+    wa_url = f"https://wa.me/{clean_phone.replace('+', '')}?text={encoded_wa}" if clean_phone else None
 
     email_sub = urllib.parse.quote(f"[AgentStock PO Dispatch] {sku} - {quantity} Units")
     email_body = urllib.parse.quote(wa_msg)
-    mailto_url = f"mailto:{email}?subject={email_sub}&body={email_body}"
-    tel_url = f"tel:{clean_phone}"
+    mailto_url = f"mailto:{email}?subject={email_sub}&body={email_body}" if email else None
+    tel_url = f"tel:{clean_phone}" if clean_phone else None
 
     _h(
         f"""
@@ -207,21 +205,21 @@ def render_supplier_communication_suite(
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
-                <a href="{wa_url}" target="_blank" style="text-decoration: none;">
+                {f'''<a href="{wa_url}" target="_blank" style="text-decoration: none;">
                     <div style="background: linear-gradient(135deg, #25D366, #128C7E); color: #FFF; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-align: center; font-size: 14px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);">
                         💬 Dispatch via WhatsApp
                     </div>
-                </a>
-                <a href="{tel_url}" target="_blank" style="text-decoration: none;">
+                </a>''' if wa_url else '<div style="color: var(--muted); font-size: 13px;">WhatsApp unavailable: no supplier phone.</div>'}
+                {f'''<a href="{tel_url}" target="_blank" style="text-decoration: none;">
                     <div style="background: linear-gradient(135deg, #3B82F6, #1D4ED8); color: #FFF; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-align: center; font-size: 14px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);">
                         📞 Call Sales ({clean_phone})
                     </div>
-                </a>
-                <a href="{mailto_url}" target="_blank" style="text-decoration: none;">
+                </a>''' if tel_url else '<div style="color: var(--muted); font-size: 13px;">Calling unavailable: no supplier phone.</div>'}
+                {f'''<a href="{mailto_url}" target="_blank" style="text-decoration: none;">
                     <div style="background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-light); color: #FFF; font-weight: 700; padding: 12px 16px; border-radius: 12px; text-align: center; font-size: 14px;">
                         ✉️ Email Official PO
                     </div>
-                </a>
+                </a>''' if mailto_url else '<div style="color: var(--muted); font-size: 13px;">Email unavailable: no supplier email.</div>'}
             </div>
 
             <details style="margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
@@ -310,7 +308,26 @@ def render_pricing_card(
         for feat in features:
             st.markdown(f"<div style='font-size: 13px; color: #CBD5E1; margin-bottom: 8px;'><span style='color: #22C55E; font-weight: 700;'>✓</span> {feat}</div>", unsafe_allow_html=True)
 
-        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+        st.button(button_text, key=key, type="primary" if is_popular else "secondary", width="stretch")
 
-        if st.button(button_text, key=key, type="primary" if is_popular else "secondary", use_container_width=True):
-            st.info(f"💡 Demo Mode: '{title}' plan selection acknowledged! Payments are disabled in this prototype.")
+
+def render_subscription_locked_card(feature_title: str = "This Feature"):
+    """Render a clean, friendly subscription upgrade card for locked operational tools."""
+    _h(
+        f"""
+        <div style="background: rgba(109, 93, 252, 0.08); border: 1.5px solid rgba(109, 93, 252, 0.35); border-radius: 16px; padding: 28px 24px; text-align: center; max-width: 680px; margin: 20px auto 30px auto;">
+            <div style="font-size: 38px; margin-bottom: 10px;">🔒</div>
+            <div style="font-size: 22px; font-weight: 800; color: #FFFFFF;">Subscription Required</div>
+            <div style="font-size: 15px; font-weight: 600; color: #A5B4FC; margin-top: 4px;">Your workspace is ready.</div>
+            <div style="font-size: 13.5px; color: #CBD5E1; line-height: 1.6; margin: 12px auto 20px auto; max-width: 540px;">
+                Choose an active plan to activate <strong>{feature_title}</strong>, AI stock recognition, supplier workflows, purchase order dispatching, and automated business tools.
+            </div>
+        </div>
+        """
+    )
+    c_btn1, c_btn2, c_btn3 = st.columns([1, 1.5, 1])
+    with c_btn2:
+        btn_key = f"btn_lock_plans_{abs(hash(feature_title)) % 100000}"
+        if st.button("💎 View Plans & Activate Workspace", type="primary", key=btn_key, width="stretch"):
+            st.session_state["pending_nav_page"] = "💎 SaaS Pricing"
+            st.rerun()

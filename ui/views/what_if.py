@@ -30,6 +30,18 @@ def render_what_if_view(database: Database):
         """
     )
 
+    from core.billing.subscription_service import SubscriptionService
+    from ui.components import render_subscription_locked_card
+    user = st.session_state.get("authenticated_user")
+    user_id = user.id if user else None
+    sub_svc = SubscriptionService(database)
+    is_subscribed = sub_svc.is_subscription_active(user_id) if user_id else False
+    is_admin = getattr(user, "role", "") == "ADMIN"
+
+    if not is_subscribed and not is_admin:
+        render_subscription_locked_card("What-If Counterfactual Simulator")
+        return
+
     result = st.session_state.get("decision_workflow_result")
     if result is None:
         st.info("💡 Please generate or select a decision baseline in the **Decision Workbench** first to enable What-If simulation.")

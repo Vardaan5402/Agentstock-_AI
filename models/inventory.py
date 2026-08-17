@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,7 @@ class Product(BaseModel):
 
     id: str = Field(min_length=1)
     business_id: str = Field(min_length=1)
+    user_id: Optional[str] = None
     sku: str = Field(min_length=1)
     name: str = Field(min_length=1)
     current_stock: int = Field(ge=0)

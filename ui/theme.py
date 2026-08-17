@@ -12,7 +12,7 @@ def inject_theme():
             @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
             /* =========================================================
-               AGENTSTOCK AI — COMPETITION-GRADE SaaS DESIGN SYSTEM
+               AGENTSTOCK AI — ENTERPRISE COMMERCIAL SaaS DESIGN SYSTEM
                ========================================================= */
 
             :root {

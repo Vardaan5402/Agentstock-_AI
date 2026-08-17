@@ -1,130 +1,125 @@
 # AgentStock AI
 
-> An AI-powered inventory intelligence and decision-support system for businesses — combining deterministic inventory analytics, supplier constraint evaluation, counterfactual simulation, and structured Gemini reasoning.
+> **AI-powered inventory intelligence for modern businesses.**
+> *See your stock. Understand your inventory. Act faster.*
 
-AgentStock AI is designed to help businesses understand **when inventory risk is emerging, what purchasing options are available, what could happen under different scenarios, and why a particular decision may make sense**.
-
-The system intentionally separates deterministic business logic from AI reasoning: numerical calculations, feasibility checks, simulations, and policy validation remain deterministic, while Gemini is used for structured qualitative reasoning over verified facts.
-
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)]()
-[![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)]()
-[![Google Gemini](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?logo=google&logoColor=white)]()
-[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white)]()
-[![Pydantic](https://img.shields.io/badge/Validation-Pydantic-E92063)]()
-[![License](https://img.shields.io/badge/License-MIT-green)]()
+AgentStock AI is an enterprise-grade inventory intelligence and supplier decision SaaS platform. It bridges physical stock management with automated supplier purchasing workflows, combining **deterministic inventory simulation**, **Gemini multimodal AI reasoning**, **privacy-first camera scanning**, **multilingual voice assistance**, and **1-click multi-channel PO dispatch** (WhatsApp, Email, Phone).
 
 ---
 
-## 🚀 Overview
+## ⚡ Key Capabilities
 
-Inventory decisions look simple on the surface:
+### 1. 📷 Privacy-First AI Camera Inventory Scanner
+- Point mobile, tablet, or webcams at retail shelves, cartons, or barcodes.
+- Powered by hybrid computer vision and Gemini 2.5/3.6 Flash multimodal extraction.
+- **Privacy Person Detection**: Real-time filter automatically rejects and blurs frames containing human beings or faces. Zero facial recognition or worker surveillance.
+- Pre-commit manual editing (e.g. adjust detected counts from 12 to 10 before saving).
 
-> **"Which supplier should I purchase from?"**
+### 2. 🎙️ Multilingual Voice Inventory Assistant
+- Speak natural stock updates hands-free in English, Hindi (हिंदी), Spanish (Español), French (Français), Bengali (বাংলা), Marathi (मराठी), and 15+ global languages.
+- Translates and normalizes colloquial phrases (e.g., *"Add 25 packets of basmati rice"* or *"25 packet rice add karo"*).
+- Deterministic confirmation preview before mutating database records.
 
-In reality, the decision can depend on:
+### 3. 🚚 Supplier Directory & Instant Multi-Channel PO Dispatch
+- Complete directory tracking supplier phone numbers, GST IDs, lead times, and reliability scores.
+- Automated professional Purchase Order drafting with itemization and pricing terms.
+- **1-Click WhatsApp Dispatch**: Generates formatted click-to-chat deep links (`https://wa.me/...`).
+- **SMTP Email Dispatch**: Instant order transmission via configured email server.
+- **Direct Phone Dialer**: Native browser telephone dialer link (`tel:...`).
+- Immutable communication audit trail.
 
-- Current inventory
-- Daily demand
-- Safety stock
-- Supplier pricing
-- Minimum order quantities
-- Supplier reliability
-- Supplier lead time
-- Budget constraints
-- Expected stockout risk
-- Purchase timing
-- Policy restrictions
-- Operational feasibility
-- Financial feasibility
-- Uncertainty in the available data
+### 4. 📄 Intelligent Document & Invoice OCR
+- Upload PDF, CSV, XLSX, PNG, or JPG invoices and packing slips.
+- Extracts structured inventory lines, SKUs, and unit costs with tenant directory isolation.
 
-Traditional inventory software often provides dashboards and raw numbers.
+### 5. ⚙️ Fact-Bounded AI Decision Engine & What-If Simulator
+- **Zero Numerical Hallucinations**: Gemini never calculates arithmetic or invents supplier parameters. The deterministic simulation engine computes all metrics first.
+- **Reference Validation**: Rejects any LLM claim not explicitly present in the authoritative facts payload.
+- **Counterfactual What-If Simulator**: Test price shocks, demand surges, and supplier lead-time delays against immutable baselines.
+- **Human-in-the-Loop Governance**: Review-only recommendations requiring explicit human sign-off.
 
-AgentStock AI goes one step further.
+### 6. 💳 Enterprise Subscription Billing (Razorpay)
+- Live Razorpay order creation, HMAC-SHA256 signature verification, and webhook handling.
+- Flexible Starter, Professional, and Enterprise plans with monthly and annual billing.
+- Promotional coupon engine (`LAUNCH50`, `SAVE20`).
+- Server-side metered usage tracking for camera scans, voice commands, and decision analyses.
 
-It creates a **decision intelligence layer** between business data and human action.
-
-Instead of simply saying:
-
-> "Buy from Supplier A."
-
-AgentStock AI attempts to answer:
-
-> **"What should I do, why should I do it, what evidence supports that decision, what could go wrong, and should a human approve it?"**
-
----
-
-# 🎯 The Problem
-
-Small and medium-sized businesses frequently make inventory decisions using spreadsheets, intuition, messaging applications, phone calls, and disconnected supplier information.
-
-This creates several problems:
-
-### 1. Stockouts
-
-Businesses may discover too late that inventory will not last until the next supplier delivery.
-
-### 2. Excess Inventory
-
-Ordering too much inventory ties up working capital and increases storage costs.
-
-### 3. Supplier Complexity
-
-The cheapest supplier isn't always the best supplier.
-
-A supplier with a lower price may have:
-
-- Longer lead time
-- Lower reliability
-- Higher MOQ
-- Greater operational risk
-
-### 4. Budget Constraints
-
-A theoretically optimal purchase may still be financially impossible.
-
-### 5. Black-Box AI
-
-A language model may produce a convincing recommendation that isn't actually supported by the underlying business data.
-
-### 6. Lack of Auditability
-
-Businesses need to know:
-
-- What data was used?
-- What recommendation was generated?
-- Which scenario was selected?
-- What assumptions were made?
-- Why was the recommendation accepted or rejected?
-- What did the system know at that moment?
-
-AgentStock AI is designed around these problems.
+### 7. 👑 Platform Superadmin Console & Security Alert Stream
+- Dedicated admin portal for platform management (`ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH`).
+- Telemetry KPIs, user role management, account locking, and security incident monitoring.
+- Configurable GDPR data retention cleanup for audit ledgers.
 
 ---
 
-# 💡 The AgentStock AI Approach
+## 🔒 Security & Privacy Architecture
 
-AgentStock AI combines:
+- **Salted Password Hashing**: PBKDF2-HMAC-SHA256 with 260,000 iterations.
+- **Secure OTPs**: 6-digit one-time codes stored as HMAC-SHA256 hashes (never plaintext).
+- **Multi-Tenant Isolation**: Queries scoped to `user_id` and `business_id` to eliminate IDOR.
+- **Rate Limiting**: Sliding-window rate limiters across auth and mutation endpoints.
+- **Prompt Injection Defense**: Multi-layered boundary checks on user text prompts.
+- **Self-Service GDPR Rights**: Complete JSON data export and account erasure.
 
-```text
-Business Data
-     ↓
-Deterministic Calculations
-     ↓
-Inventory Risk Analysis
-     ↓
-Supplier Feasibility
-     ↓
-Scenario Simulation
-     ↓
-Evidence Snapshot
-     ↓
-Google Gemini Reasoning
-     ↓
-Reference Validation
-     ↓
-Policy Validation
-     ↓
-Human Review
-     ↓
-Audit Trail
+---
+
+## 🚀 Quickstart & Local Installation
+
+### Prerequisites
+- Python 3.10+
+- SQLite 3.35+ or PostgreSQL 14+
+
+### Setup
+```bash
+# 1. Clone the repository
+git clone https://github.com/Vardaan5402/Agentstock-_AI.git
+cd Agentstock-_AI
+
+# 2. Set up virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
+cp .env.example .env
+# Fill in GEMINI_API_KEY, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, etc.
+
+# 5. Run the Automated Test Suite (117 Tests)
+python -m unittest discover -s . -p "test_*.py"
+
+# 6. Launch the Streamlit SaaS Application
+streamlit run app.py
+```
+
+---
+
+## 🧪 Automated Test Suite
+
+AgentStock AI includes 117 automated unit tests covering all deterministic models, simulations, security routines, and billing systems:
+
+```bash
+./.venv/bin/python -m unittest discover -s . -p "test_*.py"
+```
+
+| Test Suite | Purpose |
+|---|---|
+| `test_calculations.py` | Runway, reorder quantity, and stockout risk formulas |
+| `test_constraints.py` | Policy ceilings, budget constraints, and MOQ checks |
+| `test_decision_workflow.py` | 5-step fact-bounded decision pipeline |
+| `test_what_if.py` | Counterfactual shock simulation and comparisons |
+| `test_decision_persistence.py` | Immutable snapshots and audit logging |
+| `test_razorpay_billing.py` | Razorpay order creation and HMAC-SHA256 verification |
+| `test_coupons.py` | Discount percentages, caps, and plan restrictions |
+| `test_auth_security.py` | PBKDF2 password hashing, OTP hashes, and rate limiting |
+| `test_supplier_communication.py` | PO drafting, WhatsApp URLs, and soft delete |
+| `test_document_processor.py` | MIME validation, CSV parsing, and XSS script rejection |
+| `test_multilingual_voice.py` | Hindi, Spanish, and English voice command parsing |
+| `test_camera_privacy.py` | Privacy person detection and frame warnings |
+| `test_chatbot_moderation.py` | Acceptable use policy and prompt injection boundaries |
+| `test_multi_tenant_database.py` | Tenant isolation, IDOR prevention, and GDPR export |
+
+---
+
+## ⚖️ License & Acceptable Use
+This project is licensed under the commercial terms of AgentStock AI and is strictly restricted to legitimate business inventory management in accordance with our [Acceptable Use Policy](docs/ACCEPTABLE_USE_POLICY.md) and [Privacy Policy](docs/PRIVACY.md).

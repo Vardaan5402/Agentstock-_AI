@@ -3,7 +3,7 @@ gatherUsageStats = false
 
 [server]
 headless = true
-port = 8501
+port = 8505
 
 [theme]
 primaryColor = "#6D5DFC"

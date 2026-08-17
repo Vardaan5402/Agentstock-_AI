@@ -1,6 +1,6 @@
 """Validated immutable records for persisted decision evidence and audit history."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel, Field, model_validator
@@ -83,3 +83,31 @@ class AuditEvent(BaseModel):
     event_type: AuditEventType
     metadata: dict[str, str] = Field(default_factory=dict)
     created_at: datetime
+
+
+class AdminAuditEvent(BaseModel):
+    """An immutable, append-only security and administrative audit record."""
+
+    id: str = Field(min_length=1)
+    user_id: str | None = None
+    user_email: str | None = None
+    event_type: str = Field(min_length=1)
+    entity_type: str = Field(default="SYSTEM")
+    entity_id: str = Field(default="NONE")
+    metadata_json: str = Field(default="{}")
+    ip_address: str | None = None
+    user_agent: str | None = None
+    security_classification: str = Field(default="STANDARD")
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class UserActivityEvent(BaseModel):
+    """User-visible activity history record."""
+
+    id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    activity_type: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    description: str = Field(default="")
+    metadata_json: str = Field(default="{}")
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

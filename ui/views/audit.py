@@ -2,7 +2,9 @@ import json
 import streamlit as st
 from database.database import Database
 from core.decision_persistence import list_audit_events
+from core.security import require_admin
 from ui.components import render_section_header, render_kpi_card
+from ui.views.auth import get_current_user
 
 def _clean_html(html_str: str) -> str:
     return "\n".join(line.lstrip() for line in html_str.splitlines())
@@ -57,6 +59,14 @@ def render_audit_event_summary(ev):
 
 def render_audit_view(database: Database):
     """Render the Enterprise Audit Trail & Governance view."""
+    # This guard is intentionally inside the view as well as the application
+    # router, so direct function invocation cannot expose audit records.
+    current_user = get_current_user(database)
+    auth_ok, message = require_admin(current_user)
+    if not auth_ok:
+        st.error(message)
+        return
+
     _h(
         """
         <div style="margin-bottom: 20px;">
@@ -71,7 +81,7 @@ def render_audit_view(database: Database):
     )
 
     try:
-        events = list_audit_events(database)
+        events = list_audit_events(database, current_user)
         total_events = len(events)
         
         # 1. Top-Level Metric Cards

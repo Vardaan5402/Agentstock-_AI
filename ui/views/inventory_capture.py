@@ -19,6 +19,7 @@ from core.product_matcher import ProductMatcher
 from core.voice_inventory import VoiceInventoryParser
 from core.gemini_inventory_vision import GeminiInventoryVisionAnalyzer
 from core.inventory_reconciliation import InventoryReconciliationEngine
+from core.security import require_admin
 from models.inventory_capture import (
     InventoryVoiceCommand,
     InventoryVoiceCommandType,
@@ -68,18 +69,30 @@ def render_inventory_capture_view(database: Database):
     )
 
     # 2. User & Subscription Context
+    from ui.components import render_subscription_locked_card
     user = st.session_state.get("authenticated_user")
     user_id = user.id if user else None
     sub_svc = SubscriptionService(database)
     voice_limits = sub_svc.get_voice_limits(user_id)
     vision_limits = sub_svc.get_vision_limits(user_id)
+    is_subscribed = sub_svc.is_subscription_active(user_id) if user_id else False
+    is_admin = getattr(user, "role", "") == "ADMIN"
+    audit_admin, _ = require_admin(user)
+
+    if not is_subscribed and not is_admin:
+        render_subscription_locked_card("Smart Inventory Capture (Voice & Camera Scanner)")
+        return
 
     # 3. Main Navigation Tabs
-    tab_voice, tab_camera, tab_history = st.tabs([
-        "🎙️ Voice Inventory Assistant",
-        "📷 Camera / Image Scanner & Reconciliation",
-        "📋 Discrepancy & Audit Log",
-    ])
+    tabs = st.tabs(
+        [
+            "🎙️ Voice Inventory Assistant",
+            "📷 Camera / Image Scanner & Reconciliation",
+        ]
+        + (["📋 Discrepancy & Audit Log"] if audit_admin else [])
+    )
+    tab_voice, tab_camera = tabs[:2]
+    tab_history = tabs[2] if audit_admin else None
 
     # =========================================================================
     # TAB 1: VOICE INVENTORY ASSISTANT
@@ -96,8 +109,9 @@ def render_inventory_capture_view(database: Database):
     # =========================================================================
     # TAB 3: AUDIT & DISCREPANCY LOG
     # =========================================================================
-    with tab_history:
-        _render_capture_history(database)
+    if tab_history:
+        with tab_history:
+            _render_capture_history(database)
 
 
 def _render_voice_assistant(database: Database, user: Optional[User], limits: dict):
@@ -120,25 +134,9 @@ def _render_voice_assistant(database: Database, user: Optional[User], limits: di
         """
     )
 
-    # Sample One-Click Demo Phrases
-    st.markdown("**⚡ Quick Example Voice Commands (Click to test):**")
-    demo_cols = st.columns(3)
-    with demo_cols[0]:
-        if st.button("➕ 'Add 25 units of Amul Taza 500ml'", key="vdemo_1"):
-            st.session_state["voice_input_text"] = "Add 25 units of Amul Taza 500ml"
-        if st.button("❓ 'How many units of SKU AMUL500 are in stock?'", key="vdemo_2"):
-            st.session_state["voice_input_text"] = "How many units of SKU AMUL500 are in stock?"
-    with demo_cols[1]:
-        if st.button("➖ 'Remove 5 units of Amul Butter 500g'", key="vdemo_3"):
-            st.session_state["voice_input_text"] = "Remove 5 units of Amul Butter 500g"
-        if st.button("📦 'Received 50 units of Nandini Milk from supplier'", key="vdemo_4"):
-            st.session_state["voice_input_text"] = "Received 50 units of Nandini Milk from supplier"
-    with demo_cols[2]:
-        if st.button("⚙️ 'Set the stock of Amul Taza 500ml to 100'", key="vdemo_5"):
-            st.session_state["voice_input_text"] = "Set the stock of Amul Taza 500ml to 100"
-        if st.button("⚠️ 'Show products that are running low'", key="vdemo_6"):
-            st.session_state["voice_input_text"] = "Show products that are running low"
-
+    # Example Voice Command Templates
+    st.markdown("**⚡ Common Voice Commands Examples:**")
+    st.caption("You can speak or type natural commands in your preferred language, e.g. *'Add 20 units of [Product Name]'*, *'Stock 15 bottles received'*, or *'50 packet stock add karo'*.")
     st.write("")
 
     # Speech / Audio Input & Text Box
@@ -415,7 +413,7 @@ def _render_camera_scanner(database: Database, user: Optional[User], limits: dic
         st.markdown("#### 📸 Capture or Upload Image")
         source_mode = st.radio(
             "Input Mode:",
-            ["📷 Live Camera Input", "📁 Upload Image File", "🧪 Test Demo Shelf Image"],
+            ["📷 Live Camera Input", "📁 Upload Image File"],
             horizontal=True,
             key="scanner_source_radio",
         )
@@ -430,11 +428,6 @@ def _render_camera_scanner(database: Database, user: Optional[User], limits: dic
             up_file = st.file_uploader("Upload product shelf or carton photo (JPG, PNG, WEBP)", type=["jpg", "jpeg", "png", "webp"], key="cam_upload_file")
             if up_file is not None:
                 image_bytes = up_file.getvalue()
-        else:
-            st.info("🧪 **Test Demo Mode**: Simulates scanning a multi-product beverage shelf with Coca Cola, Pepsi, and Sprite cartons.")
-            if st.button("🚀 Run Demo Shelf Scan Analysis", key="btn_run_demo_shelf_scan"):
-                # Deterministic demo payload for test validation without camera
-                st.session_state["demo_scan_active"] = True
 
         if image_bytes:
             st.image(image_bytes, caption="📸 Scanned Frame", use_container_width=True)
@@ -449,49 +442,6 @@ def _render_camera_scanner(database: Database, user: Optional[User], limits: dic
                 analyzer = GeminiInventoryVisionAnalyzer()
                 vision_res = analyzer.analyze_image(image_bytes)
                 st.session_state["latest_vision_result"] = vision_res
-                st.session_state["demo_scan_active"] = False
-
-        if st.session_state.get("demo_scan_active"):
-            # Provide structured test vision result matching existing products
-            products = database.list_all_products()
-            p1 = products[0] if len(products) > 0 else None
-            p2 = products[1] if len(products) > 1 else None
-
-            demo_items = [
-                InventoryVisionItem(
-                    product_name=p1.name if p1 else "Amul Taza 500ml",
-                    sku=p1.sku if p1 else "AMUL500",
-                    observed_quantity=35,
-                    confidence=0.96,
-                    evidence="Counted 7 rows of 5 milk packets visible on top shelf.",
-                ),
-            ]
-            if p2:
-                demo_items.append(
-                    InventoryVisionItem(
-                        product_name=p2.name,
-                        sku=p2.sku,
-                        observed_quantity=18,
-                        confidence=0.92,
-                        evidence="Counted 3 packs of 6 cartons on shelf level 2.",
-                    )
-                )
-            demo_items.append(
-                InventoryVisionItem(
-                    product_name="Sprite 500ml",
-                    sku="SPR500",
-                    observed_quantity=None, # Unquantifiable item to test safety
-                    confidence=0.65,
-                    evidence="Partially visible green bottles behind front shelf, exact count unquantifiable.",
-                )
-            )
-
-            st.session_state["latest_vision_result"] = InventoryVisionResult(
-                items=demo_items,
-                image_hash="demo_shelf_image_hash_12345",
-                model="gemini-2.5-flash",
-                extraction_confidence=0.94,
-            )
 
         vision_res: Optional[InventoryVisionResult] = st.session_state.get("latest_vision_result")
 
@@ -504,7 +454,7 @@ def _render_camera_scanner(database: Database, user: Optional[User], limits: dic
                     <div style="font-size: 36px; margin-bottom: 8px;">📷</div>
                     <div style="font-size: 16px; font-weight: 700; color: #FFFFFF;">No Scan Active</div>
                     <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-                        Take a photo or click <strong>'Run Demo Shelf Scan'</strong> to inspect inventory discrepancies.
+                        Take a photo or upload an image to inspect inventory counts and discrepancies.
                     </div>
                 </div>
                 """
@@ -610,6 +560,11 @@ def _render_reconciliation_report(
 # =========================================================================
 def _render_capture_history(database: Database):
     """Render recent voice & vision capture audit records."""
+    auth_ok, message = require_admin(st.session_state.get("authenticated_user"))
+    if not auth_ok:
+        st.error(message)
+        return
+
     _h(
         """
         <div class="agent-card" style="margin-bottom: 20px;">

@@ -1,12 +1,14 @@
-"""Centralized Entitlement and Subscription Access Service for AgentStock AI."""
-from typing import Optional, Tuple
+"""Centralized Entitlement, Subscription Gating & Metered Usage Service."""
+from datetime import datetime, timezone
+from typing import Optional, Tuple, Dict, Any
 from uuid import uuid4
 from database.database import Database
-from models.subscription import UserSubscription, SubscriptionStatus, PlanTier
+from models.subscription import UserSubscription, SubscriptionStatus, PlanTier, BillingCycle, UsageRecord
+from core.config import get_plan_pricing, is_demo_mode
 
 
 class SubscriptionService:
-    """Centralized access control evaluating user entitlements against active subscriptions."""
+    """Centralized server-side access control evaluating user entitlements and usage limits."""
 
     def __init__(self, database: Database):
         self.database = database
@@ -21,19 +23,28 @@ class SubscriptionService:
                 subscription_status=SubscriptionStatus.ACTIVE.value,
             )
 
+        # Internal developer demo mode bypass if explicitly configured
+        if is_demo_mode() and user_id.startswith("dev_test_"):
+            return UserSubscription(
+                id=f"sub_{user_id}",
+                user_id=user_id,
+                plan_name=PlanTier.ENTERPRISE.value,
+                subscription_status=SubscriptionStatus.ACTIVE.value,
+            )
+
         sub = self.database.get_subscription_by_user_id(user_id)
         if sub and sub.is_active:
             return sub
 
-        return UserSubscription(
-            id=uuid4().hex,
-            user_id=user_id,
-            plan_name=PlanTier.FREE.value,
-            subscription_status=SubscriptionStatus.ACTIVE.value,
-        )
+        return UserSubscription(id=uuid4().hex, user_id=user_id, plan_name=PlanTier.FREE.value)
+
+    def is_subscription_active(self, user_id: Optional[str]) -> bool:
+        """Check if user has an active, paid subscription."""
+        sub = self.get_user_subscription(user_id)
+        return sub.is_active and sub.plan_name.upper() != PlanTier.FREE.value
 
     def get_user_plan(self, user_id: Optional[str]) -> str:
-        """Get the tier name for a user."""
+        """Get current plan tier name."""
         sub = self.get_user_subscription(user_id)
         return sub.plan_name.upper()
 
@@ -41,11 +52,9 @@ class SubscriptionService:
         """Check if user has entitlement for specific platform feature."""
         plan = self.get_user_plan(user_id)
 
-        # Enterprise has all features
         if plan == PlanTier.ENTERPRISE.value:
             return True
 
-        # Feature rules
         feature_matrix = {
             "deterministic_simulation": {PlanTier.FREE.value, PlanTier.STARTER.value, PlanTier.PROFESSIONAL.value, PlanTier.ENTERPRISE.value},
             "gemini_reasoning": {PlanTier.FREE.value, PlanTier.STARTER.value, PlanTier.PROFESSIONAL.value, PlanTier.ENTERPRISE.value},
@@ -63,32 +72,37 @@ class SubscriptionService:
         allowed_plans = feature_matrix.get(feature_name, {PlanTier.ENTERPRISE.value})
         return plan in allowed_plans
 
+    def _require_paid(self, user_id: Optional[str], feature: str) -> Tuple[bool, str]:
+        if self.is_subscription_active(user_id):
+            return True, f"{feature} permitted."
+        return False, "Subscription Required. Choose a paid AgentStock AI plan to access this workspace."
+
     def can_create_decision(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user can run a new inventory decision analysis."""
-        return True, "Decision analysis permitted."
+        return self._require_paid(user_id, "Decision analysis")
 
     def can_run_what_if(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user can run counterfactual what-if simulations."""
-        return True, "What-If simulation permitted."
+        return self._require_paid(user_id, "What-If simulation")
 
     def can_use_copilot(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user can execute Gemini Decision Copilot questions."""
-        return True, "Gemini Copilot permitted."
+        return self._require_paid(user_id, "Gemini Copilot")
 
     def can_use_voice_inventory(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user has voice inventory assistance entitlement."""
-        return True, "Voice inventory permitted."
+        return self._require_paid(user_id, "Voice inventory")
 
     def can_use_image_scan(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user has visual inventory scanning entitlement."""
-        return True, "Visual scanner permitted."
+        return self._require_paid(user_id, "Visual scanner")
 
     def can_use_reconciliation(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user has automated visual reconciliation entitlement."""
         plan = self.get_user_plan(user_id)
         if plan in {PlanTier.STARTER.value, PlanTier.PROFESSIONAL.value, PlanTier.ENTERPRISE.value}:
             return True, f"Inventory reconciliation active for {plan} tier."
-        return True, "Reconciliation preview enabled."
+        return False, "Subscription Required. Choose a paid AgentStock AI plan to use inventory reconciliation."
+
+    def can_use_advanced_features(self, user_id: Optional[str]) -> Tuple[bool, str]:
+        plan = self.get_user_plan(user_id)
+        if plan in {PlanTier.PROFESSIONAL.value, PlanTier.ENTERPRISE.value}:
+            return True, f"Full {plan} access active."
+        return False, "This feature requires a Professional or Enterprise plan."
 
     def get_voice_limits(self, user_id: Optional[str]) -> dict:
         """Get monthly voice command allowances for user tier."""
@@ -112,9 +126,56 @@ class SubscriptionService:
         }
         return limits.get(plan, limits[PlanTier.FREE.value])
 
-    def can_use_advanced_features(self, user_id: Optional[str]) -> Tuple[bool, str]:
-        """Check if user has access to Pro/Enterprise features."""
+    def get_usage(self, user_id: Optional[str]) -> UsageRecord:
+        """Retrieve or initialize current month's usage record."""
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        uid = user_id or "anonymous"
+        usage = self.database.get_usage_record(uid, current_month)
+        if usage:
+            return usage
+
+        new_rec = UsageRecord(
+            id=f"usg_{uid[:8]}_{current_month.replace('-', '')}",
+            user_id=uid,
+            period_month=current_month,
+        )
+        self.database.save_usage_record(new_rec)
+        return new_rec
+
+    def check_and_increment_usage(
+        self, user_id: Optional[str], metric: str
+    ) -> Tuple[bool, str, int, int]:
+        """Check if user has remaining allowance for a metered operation and increment count."""
+        if not user_id:
+            return False, "Please sign in and subscribe to use this feature.", 0, 0
+
         plan = self.get_user_plan(user_id)
-        if plan in {PlanTier.PROFESSIONAL.value, PlanTier.ENTERPRISE.value}:
-            return True, f"Full {plan} access active."
-        return False, "This feature requires a Professional or Enterprise plan."
+        pricing = get_plan_pricing(plan)
+        limits_map = {
+            "camera_scans": pricing.get("camera_scans", 100),
+            "voice_queries": pricing.get("voice_queries", 250),
+            "ai_decisions": pricing.get("ai_decisions", 500),
+            "documents_analyzed": pricing.get("documents_analyzed", 50),
+        }
+        limit = limits_map.get(metric, 100)
+
+        usage = self.get_usage(user_id)
+        current_used = getattr(usage, metric, 0)
+
+        if current_used >= limit:
+            return (
+                False,
+                f"You have reached your {plan} plan limit of {limit} {metric.replace('_', ' ')} this month.",
+                current_used,
+                limit,
+            )
+
+        setattr(usage, metric, current_used + 1)
+        usage.updated_at = datetime.now(timezone.utc).isoformat()
+        self.database.save_usage_record(usage)
+        return True, "Operation permitted.", current_used + 1, limit
+
+    def can_access_dashboard(self, user_id: Optional[str]) -> Tuple[bool, str]:
+        if not user_id:
+            return False, "Authentication required to access workspace dashboard."
+        return self._require_paid(user_id, "Workspace access")

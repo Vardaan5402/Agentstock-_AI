@@ -138,39 +138,17 @@ def render_workbench_view(database: Database):
         """
     )
 
-    # Top Demo Quick Launch Bar for Judges
-    demo_col1, demo_col2 = st.columns([3, 1])
-    with demo_col1:
-        st.info("💡 **Judge Quick Start**: Click 'Run Demo Decision' to execute the complete prefilled Metro Organic Grocers inventory evaluation in 1 click.")
-    with demo_col2:
-        if st.button("⚡ Run Demo Decision", type="primary", key="btn_run_demo_quick"):
-            # Execute demo workflow
-            workflow_input = _build_input(
-                {
-                    "business_id": "workbench-business",
-                    "product_id": "workbench-product",
-                    "business_name": "Metro Organic Grocers",
-                    "country": "IN",
-                    "currency": "INR",
-                    "industry": "Retail grocery",
-                    "sku": "MILK-10L",
-                    "product_name": "Organic whole milk (10L crate)",
-                    "current_stock": 12,
-                    "daily_demand": 6.0,
-                    "safety_stock": 5,
-                    "unit_cost": 100.0,
-                    "budget": 5000.0,
-                    "simulation_days": 14,
-                },
-                [
-                    {"name": "Rapid Dairy Logistics", "unit_price": 120.0, "minimum_order_quantity": 1, "lead_time_days": 1.0, "reliability_score": 0.90},
-                    {"name": "Value Dairy Co.", "unit_price": 85.0, "minimum_order_quantity": 1, "lead_time_days": 5.0, "reliability_score": 0.80},
-                    {"name": "Bulk Dairy Partners", "unit_price": 110.0, "minimum_order_quantity": 50, "lead_time_days": 2.0, "reliability_score": 0.95},
-                ],
-            )
-            reasoner = GeminiStructuredReasoner() if os.environ.get("GEMINI_API_KEY") else None
-            st.session_state["decision_workflow_result"] = run_decision_workflow(workflow_input, reasoner)
-            st.rerun()
+    from core.billing.subscription_service import SubscriptionService
+    from ui.components import render_subscription_locked_card
+    user = st.session_state.get("authenticated_user")
+    user_id = user.id if user else None
+    sub_svc = SubscriptionService(database)
+    is_subscribed = sub_svc.is_subscription_active(user_id) if user_id else False
+    is_admin = getattr(user, "role", "") == "ADMIN"
+
+    if not is_subscribed and not is_admin:
+        render_subscription_locked_card("AI Decision Workbench & Simulation Engine")
+        return
 
     render_ai_pipeline_banner(current_step=4 if "decision_workflow_result" in st.session_state else 2)
 
@@ -241,7 +219,7 @@ def render_workbench_view(database: Database):
     # Display Results if available
     result = st.session_state.get("decision_workflow_result")
     if result is None:
-        st.info("💡 Adjust inputs above or click **'Run Demo Decision'** to generate an evidence-verified AI recommendation.")
+        st.info("💡 Configure parameters above and click **'Generate Decision Review'** to run deterministic forecasting and AI supplier evaluation.")
         return
 
     # Status Banner
@@ -266,12 +244,13 @@ def render_workbench_view(database: Database):
     render_section_header("AI Recommendation Hero", "Fact-bounded decision proposal from Gemini 3.6 Flash", "✨")
 
     # Find recommended option details
-    rec_supplier_name = "Rapid Dairy Logistics"
-    rec_cost = "₹1,440.00"
-    rec_coverage = "14.0 Days"
-    rec_lead = "1.0 Days"
-    rec_qty = "12 Units"
-    rec_unit_price = "120.00"
+    rec_supplier_name = "No supplier selected"
+    rec_supplier_id = None
+    rec_cost = "—"
+    rec_coverage = "—"
+    rec_lead = "—"
+    rec_qty = "—"
+    rec_unit_price = "—"
     rec_confidence = "HIGH"
     rec_risk = result.facts.inventory_risk.stockout_risk
     
@@ -282,6 +261,7 @@ def render_workbench_view(database: Database):
             opt_id = selected_id.replace("PURCHASE_", "")
             opt = next((o for o in result.facts.purchase_options if o.option_id == opt_id), None)
             if opt:
+                rec_supplier_id = opt.supplier_id
                 sup = next((s for s in result.baseline.suppliers if s.id == opt.supplier_id), None)
                 rec_supplier_name = sup.name if sup else opt.supplier_id
                 rec_cost = f"₹{opt.total_cost:,.2f}"
@@ -305,16 +285,20 @@ def render_workbench_view(database: Database):
     )
 
     # 1B. INSTANT SUPPLIER DISPATCH & COMMUNICATION SUITE
-    render_supplier_communication_suite(
-        supplier_name=rec_supplier_name,
-        phone="+91 9569679741",
-        email=f"sales@{rec_supplier_name.lower().replace(' ', '')}.com",
-        sku=result.baseline.product.sku,
-        product_name=result.baseline.product.name,
-        quantity=rec_qty,
-        unit_price=rec_unit_price,
-        total_cost=rec_cost,
-    )
+    selected_supplier = database.get_supplier(rec_supplier_id, user.id) if rec_supplier_id and user else None
+    if selected_supplier:
+        render_supplier_communication_suite(
+            supplier_name=selected_supplier.company_name or selected_supplier.name,
+            phone=selected_supplier.phone,
+            email=selected_supplier.email,
+            sku=result.baseline.product.sku,
+            product_name=result.baseline.product.name,
+            quantity=rec_qty,
+            unit_price=rec_unit_price,
+            total_cost=rec_cost,
+        )
+    else:
+        st.info("No owned supplier is selected for this recommendation. Add or select a supplier in Supplier Directory & POs before dispatching a PO.")
 
     # 2. DECISION EXPLANATION & EVIDENCE VERIFICATION
     render_section_header("Why This Decision? (Fact-Bounded Explanation)", "Grounded qualitative reasoning & verified fact pointers", "🔍")

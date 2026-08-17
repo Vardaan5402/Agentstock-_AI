@@ -14,6 +14,7 @@ from ui.components import (
 )
 
 from ui.views.auth import get_current_user, render_top_right_auth_widget
+from core.security import require_admin
 
 def _clean_html(html_str: str) -> str:
     return "\n".join(line.lstrip() for line in html_str.splitlines())
@@ -24,6 +25,7 @@ def _h(html_str: str):
 def render_dashboard_view(database: Database):
     """Render the Overview Dashboard."""
     current_user = get_current_user(database)
+    is_admin, _ = require_admin(current_user)
 
     # Top Dashboard Header Row: Left Title & Right Auth Widget
     col_title, col_auth = st.columns([2.3, 1.2])
@@ -61,12 +63,12 @@ def render_dashboard_view(database: Database):
     render_ai_pipeline_banner(current_step=1)
 
     # Fetch real SQLite statistics
-    businesses = database.list_businesses()
+    businesses = database.list_businesses(current_user.id) if current_user else []
     total_businesses = len(businesses)
-    total_products = sum(len(database.list_products(b.id)) for b in businesses)
+    total_products = sum(len(database.list_products(b.id, current_user.id)) for b in businesses) if current_user else 0
     total_reviews = len(list_decision_reviews(database))
     total_what_ifs = len(list_what_if_scenarios(database))
-    total_audits = len(list_audit_events(database))
+    total_audits = len(list_audit_events(database, current_user)) if is_admin else None
 
     render_section_header("Platform Metrics & System Health", "Live telemetry from SQLite database and Gemini engine", "📊")
 
@@ -84,7 +86,10 @@ def render_dashboard_view(database: Database):
 
     c5, c6, c7, c8 = st.columns(4)
     with c5:
-        _h(render_kpi_card("Audit Events", total_audits, "🛡️", "Immutable Trail", "#A78BFA"))
+        if is_admin:
+            _h(render_kpi_card("Audit Events", total_audits, "🛡️", "Immutable Trail", "#A78BFA"))
+        else:
+            _h(render_kpi_card("Workspace Access", "Ready", "✓", "Your business workspace", "#A78BFA"))
     with c6:
         _h(render_kpi_card("Gemini Engine", "Online" if gemini_key_present else "Offline", "🤖", "gemini-3.6-flash", "#22C55E" if gemini_key_present else "#F59E0B"))
     with c7:
@@ -157,23 +162,24 @@ def render_dashboard_view(database: Database):
             """
         )
         if st.button("Open What-If Simulator ➔", type="secondary", key="dash_btn_wi"):
-            st.session_state["pending_nav_page"] = "🔮 What-If Analysis"
+            st.session_state["pending_nav_page"] = "🔮 What-If Simulator"
             st.rerun()
 
-    with q3:
-        _h(
-            """
-            <div class="agent-card">
-                <div style="font-size: 20px; font-weight: 700; color: #FFFFFF; margin-bottom: 8px;">🛡️ Audit & History</div>
-                <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
-                    Inspect tamper-proof audit trails, historical decisions, and compliance governance.
-                </p>
-            </div>
-            """
-        )
-        if st.button("View Audit Log ➔", type="secondary", key="dash_btn_aud"):
-            st.session_state["pending_nav_page"] = "🛡️ Audit Trail"
-            st.rerun()
+    if is_admin:
+        with q3:
+            _h(
+                """
+                <div class="agent-card">
+                    <div style="font-size: 20px; font-weight: 700; color: #FFFFFF; margin-bottom: 8px;">🛡️ Audit & History</div>
+                    <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;">
+                        Inspect tamper-proof audit trails, historical decisions, and compliance governance.
+                    </p>
+                </div>
+                """
+            )
+            if st.button("View Audit Log ➔", type="secondary", key="dash_btn_aud"):
+                st.session_state["pending_nav_page"] = "🛡️ Audit Trail"
+                st.rerun()
 
     _h("<div style='height: 24px;'></div>")
 
@@ -222,20 +228,25 @@ def render_dashboard_view(database: Database):
 
     from ui.components import render_supplier_communication_suite
 
-    if businesses:
+    if current_user and businesses:
         b_sel = businesses[0]
-        prods = database.list_products(b_sel.id)
-        if prods:
+        prods = database.list_products(b_sel.id, current_user.id)
+        sups = database.list_suppliers(b_sel.id, current_user.id)
+        if not sups:
+            st.info("No suppliers added yet. Add your first supplier in Settings & Catalog.")
+            if st.button("Add Supplier", key="dash_add_first_supplier"):
+                st.session_state["pending_nav_page"] = "⚙️ Settings & Catalog"
+                st.rerun()
+        elif prods:
             p_sel = prods[0]
-            sups = database.list_suppliers(b_sel.id)
-            s_name = sups[0].name if sups else "FreshFarm Dairy Co"
-            s_phone = sups[0].phone if (sups and sups[0].phone) else "+91 9569679741"
+            supplier_options = {f"{s.company_name or s.name} ({s.name})": s for s in sups}
+            selected_label = st.selectbox("Select Supplier", list(supplier_options), key=f"dash_supplier_{current_user.id}")
+            selected_supplier = supplier_options[selected_label]
             s_price = 55.0
-            
             render_supplier_communication_suite(
-                supplier_name=s_name,
-                phone=s_phone,
-                email=f"dispatch@{s_name.lower().replace(' ', '')}.com",
+                supplier_name=selected_supplier.company_name or selected_supplier.name,
+                phone=selected_supplier.phone,
+                email=selected_supplier.email,
                 sku=p_sel.sku,
                 product_name=p_sel.name,
                 quantity=100,
@@ -243,24 +254,6 @@ def render_dashboard_view(database: Database):
                 total_cost=f"₹{100 * s_price:,.2f}",
             )
         else:
-            render_supplier_communication_suite(
-                supplier_name="FreshFarm Dairy Co",
-                phone="+91 9569679741",
-                email="dispatch@freshfarmdairy.com",
-                sku="MILK-10L",
-                product_name="Organic Whole Milk Crate (10L)",
-                quantity=100,
-                unit_price=55.0,
-                total_cost="₹5,500.00",
-            )
+            st.info("Add products in Settings & Catalog before preparing a purchase order.")
     else:
-        render_supplier_communication_suite(
-            supplier_name="FreshFarm Dairy Co",
-            phone="+91 9569679741",
-            email="dispatch@freshfarmdairy.com",
-            sku="MILK-10L",
-            product_name="Organic Whole Milk Crate (10L)",
-            quantity=100,
-            unit_price=55.0,
-            total_cost="₹5,500.00",
-        )
+        st.info("Sign in and add a business, supplier, and product to use supplier communication.")

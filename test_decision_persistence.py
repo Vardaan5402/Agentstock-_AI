@@ -18,6 +18,7 @@ from core.decision_workflow import run_decision_workflow
 from core.what_if import run_what_if
 from core.what_if_comparison import compare_business_outcomes
 from database.database import Database
+from core.config import get_admin_email
 from models.business import Business
 from models.decision_workflow import DecisionWorkflowInput
 from models.inventory import Product
@@ -25,6 +26,7 @@ from models.persistence import AuditEventType
 from models.policy import Policy
 from models.supplier import Supplier, SupplierProduct
 from models.what_if import AdjustmentMode, NumericShock, ShockTarget, WhatIfScenario
+from models.user import User, UserRole
 
 
 def workflow_input(*, current_stock: int = 12) -> DecisionWorkflowInput:
@@ -53,6 +55,10 @@ class DecisionPersistenceTests(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.database = Database(Path(self.tempdir.name) / "agentstock-test.db")
         self.database.initialize()
+        self.admin_user = User(
+            id="admin-test", name="Admin", email=get_admin_email(),
+            password_hash="test", role=UserRole.ADMIN.value,
+        )
 
     def tearDown(self) -> None:
         self.database.close()
@@ -67,7 +73,7 @@ class DecisionPersistenceTests(unittest.TestCase):
         self.assertEqual(reopened.facts, result.facts)
         self.assertEqual(again.created_at, saved.created_at)
         self.assertEqual(len(list_decision_reviews(self.database)), 1)
-        created = [event for event in list_audit_events(self.database) if event.event_type is AuditEventType.DECISION_CREATED]
+        created = [event for event in list_audit_events(self.database, self.admin_user) if event.event_type is AuditEventType.DECISION_CREATED]
         self.assertEqual(len(created), 1)
 
     def test_changed_input_creates_a_new_snapshot(self) -> None:
@@ -93,7 +99,7 @@ class DecisionPersistenceTests(unittest.TestCase):
         self.assertEqual(reopened.baseline_snapshot_id, result.baseline.baseline_snapshot_id)
         self.assertEqual(result.baseline.product.daily_demand, 6)
         self.assertEqual(len(list_what_if_scenarios(self.database, decision_snapshot_id=saved_decision.snapshot_id)), 1)
-        event_types = [event.event_type for event in list_audit_events(self.database)]
+        event_types = [event.event_type for event in list_audit_events(self.database, self.admin_user)]
         self.assertIn(AuditEventType.WHAT_IF_CREATED, event_types)
         self.assertIn(AuditEventType.WHAT_IF_VIEWED, event_types)
 
@@ -106,7 +112,7 @@ class DecisionPersistenceTests(unittest.TestCase):
         persisted_json = "\n".join(" ".join(value or "" for value in row) for row in all_rows).lower()
         self.assertNotIn("api_key", persisted_json)
         self.assertNotIn("credential", persisted_json)
-        events = list_audit_events(self.database)
+        events = list_audit_events(self.database, self.admin_user)
         self.assertIn(AuditEventType.DECISION_CREATED, [event.event_type for event in events])
         self.assertIn(AuditEventType.DECISION_VIEWED, [event.event_type for event in events])
 
@@ -125,7 +131,7 @@ class DecisionPersistenceTests(unittest.TestCase):
         baseline, counterfactual = run_what_if(result.baseline, scenario)
         with self.assertRaisesRegex(ValueError, "baseline snapshot was not found"):
             save_what_if_scenario(self.database, "0" * 64, scenario, compare_business_outcomes(baseline, counterfactual))
-        self.assertEqual(list_audit_events(self.database), [])
+        self.assertEqual(list_audit_events(self.database, self.admin_user), [])
 
 
 if __name__ == "__main__":

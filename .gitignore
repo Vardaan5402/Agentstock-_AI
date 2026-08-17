@@ -14,3 +14,7 @@ test_*.db*
 app_m8_backup.py
 app_m9_working.py
 .streamlit/credentials.toml
+
+# Local database backups and editor backups
+*_backup_*.db
+*.backup

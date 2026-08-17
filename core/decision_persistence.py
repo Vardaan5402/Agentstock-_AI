@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from database.database import Database
+from core.security import require_admin
 from models.decision_workflow import DecisionWorkflowResult
 from models.persistence import AuditEvent, AuditEventType, SavedDecisionReview, SavedWhatIfScenario
 from models.what_if import WhatIfComparisonResult, WhatIfScenario
@@ -207,8 +208,12 @@ def list_what_if_scenarios(database: Database, *, decision_snapshot_id: str | No
     return [_parse_what_if_row(row) for row in database.list_what_if_scenarios(decision_snapshot_id)]
 
 
-def list_audit_events(database: Database) -> list[AuditEvent]:
-    """Return the non-secret audit trail, newest first."""
+def list_audit_events(database: Database, user: Any) -> list[AuditEvent]:
+    """Return audit events only to the authenticated platform administrator."""
+    authorized, message = require_admin(user)
+    if not authorized:
+        raise PermissionError(message)
+
     events = []
     for row in database.list_audit_events():
         try:
